@@ -1,0 +1,98 @@
+#!/bin/bash
+
+### BEGIN INIT INFO
+# Provides:          suricata
+# Required-Start:    
+# Required-Stop:     
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Suricata
+# Description:       Starts suricata
+### END INIT INFO
+
+CMD=$1
+NOHUP=`which nohup`
+
+DEV=eth1
+GRAYLOG2CTL_DIR="/opt/suricata/bin"
+SURICATA_CONF=/etc/suricata/suricata.yaml
+SURICATA_PID=/var/run/suricata-$DEV.pid
+SURICATA_EXEC=`which suricata`
+LOG_FILE=/var/log/suricata.log
+
+start() {
+	if [ -f "$SURICATA_PID" ]; then
+		pid=$(get_pid)
+		kill -s 0 "$pid" ; STAT=$?
+		if [ X"$STAT" == X0 ]; then
+			echo "ERROR: suricata already claims to be running as PID: $pid"
+			exit 1
+		fi
+	fi
+	echo "Starting suricata ..."
+	$SURICATA_EXEC -c $SURICATA_CONF -i $DEV >> ${LOG_FILE} 2>&1 &
+	echo "$!" > $SURICATA_PID
+}
+
+stop() {
+if [ -f "$SURICATA_PID" ]; then
+		pid=$(get_pid)
+		kill -s 0 "$pid" ; STAT=$?
+		if [ X"$STAT" == X0 ]; then
+				echo "Stopping suricata ..."
+				kill "$pid"
+		fi
+		#The next line simply waits untill $pid has stopped
+		tail -f /dev/null --pid "$pid"
+		rm "${SURICATA_PID}" 2>/dev/null
+	else
+		echo "suricata is not running"
+fi
+}
+
+restart() {
+		echo "Restarting suricata ..."
+		stop
+		start
+}
+
+status() {
+    pid=$(get_pid)
+    if [ ! -z $pid ]; then
+        if pid_running $pid; then
+            echo "suricata running as pid $pid"
+            return 0
+        else
+            echo "Stale pid file with $pid - removing..."
+            rm ${SURICATA_PID}
+        fi
+    fi
+
+    echo "suricata not running"
+}
+
+get_pid() {
+    cat ${SURICATA_PID} 2> /dev/null
+}
+
+pid_running() {
+    kill -0 $1 2> /dev/null
+}
+
+case "$CMD" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage $0 {start|stop|restart|status}"
+        RETVAL=1
+esac
